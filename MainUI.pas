@@ -75,39 +75,63 @@ begin
   PostMessage(AppHWND, WM_TRAY_CALLBACK, 0, WM_LBUTTONUP);
 end;
 
+var
+  WinSActive: Boolean = False;
+
 function LowLevelKeyboardProc(nCode: Integer; wParam: WPARAM; lParam: LPARAM): LRESULT; stdcall;
 var
   kbData: PKBDLLHOOKSTRUCT;
-  IsKeyDown: Boolean;
+  IsKeyDown, IsKeyUp: Boolean;
 begin
   if nCode = HC_ACTION then
   begin
     kbData := PKBDLLHOOKSTRUCT(lParam);
     IsKeyDown := (wParam = WM_KEYDOWN) or (wParam = WM_SYSKEYDOWN);
+    IsKeyUp   := (wParam = WM_KEYUP)   or (wParam = WM_SYSKEYUP);
 
-    // Check if 'S' key is pressed while ONLY Win is down
-    if IsKeyDown and (kbData^.vkCode = Ord('S')) then begin
-      // Win pressed?
+    // ---------------------------------------------------------
+    // DETECT Win + S
+    // ---------------------------------------------------------
+    if IsKeyDown and (kbData^.vkCode = Ord('S')) then
+    begin
       if (GetAsyncKeyState(VK_LWIN) < 0) or (GetAsyncKeyState(VK_RWIN) < 0) then
       begin
-        // NO other modifiers?
-        if (GetAsyncKeyState(VK_CONTROL) >= 0) and
-           (GetAsyncKeyState(VK_MENU) >= 0) and        // Alt
-           (GetAsyncKeyState(VK_SHIFT) >= 0) then
-        begin
-          // Run command palette
-          if Assigned(MainForm) then
-            try
-              SendMessage(MainForm.Handle, WM_CUSTOM_RUN, 0, 0);
-            except
-            end;
+        WinSActive := True;
 
-          // Block Win+S
-          Result := 1;
-          Exit;
-        end;
+        if Assigned(MainForm) then
+          SendMessage(MainForm.Handle, WM_CUSTOM_RUN, 0, 0);
+
+        Result := 1;  // block 'S'
+        Exit;
+      end;
+    end;
+
+    // ---------------------------------------------------------
+    // WHILE in Win+S mode: block Win-DOWN but allow Win-UP
+    // ---------------------------------------------------------
+    if WinSActive then
+    begin
+      // Block Win-DOWN
+      if IsKeyDown and ((kbData^.vkCode = VK_LWIN) or (kbData^.vkCode = VK_RWIN)) then
+      begin
+        Result := 1;
+        Exit;
       end;
 
+      // Allow Win-UP but instantly neutralize Start Menu
+      if IsKeyUp and ((kbData^.vkCode = VK_LWIN) or (kbData^.vkCode = VK_RWIN)) then
+      begin
+        // Cancel Start Menu by pressing and releasing SHIFT artificially
+        keybd_event(VK_SHIFT, 0, 0, 0);
+        keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
+
+        Result := 0; // DO NOT block Win-UP
+        Exit;
+      end;
+
+      // End Win+S mode when S is released
+      if (kbData^.vkCode = Ord('S')) and IsKeyUp then
+        WinSActive := False;
     end;
   end;
 
