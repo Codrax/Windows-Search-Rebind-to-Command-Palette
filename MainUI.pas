@@ -85,22 +85,29 @@ begin
     kbData := PKBDLLHOOKSTRUCT(lParam);
     IsKeyDown := (wParam = WM_KEYDOWN) or (wParam = WM_SYSKEYDOWN);
 
-    // Check if 'S' key is pressed while Win is down
-    if IsKeyDown and (kbData^.vkCode = Ord('S')) then
-    begin
+    // Check if 'S' key is pressed while ONLY Win is down
+    if IsKeyDown and (kbData^.vkCode = Ord('S')) then begin
+      // Win pressed?
       if (GetAsyncKeyState(VK_LWIN) < 0) or (GetAsyncKeyState(VK_RWIN) < 0) then
       begin
-        // Run command palette
-        if Assigned(MainForm) then
-          try
-            SendMessage(MainForm.Handle, WM_CUSTOM_RUN, 0, 0);
-          except
-          end;
+        // NO other modifiers?
+        if (GetAsyncKeyState(VK_CONTROL) >= 0) and
+           (GetAsyncKeyState(VK_MENU) >= 0) and        // Alt
+           (GetAsyncKeyState(VK_SHIFT) >= 0) then
+        begin
+          // Run command palette
+          if Assigned(MainForm) then
+            try
+              SendMessage(MainForm.Handle, WM_CUSTOM_RUN, 0, 0);
+            except
+            end;
 
-        // Block Win+S
-        Result := 1;
-        Exit;
+          // Block Win+S
+          Result := 1;
+          Exit;
+        end;
       end;
+
     end;
   end;
 
