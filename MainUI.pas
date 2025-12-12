@@ -89,26 +89,23 @@ begin
     IsKeyDown := (wParam = WM_KEYDOWN) or (wParam = WM_SYSKEYDOWN);
     IsKeyUp   := (wParam = WM_KEYUP)   or (wParam = WM_SYSKEYUP);
 
-    // ---------------------------------------------------------
-    // DETECT Win + S
-    // ---------------------------------------------------------
-    if IsKeyDown and (kbData^.vkCode = Ord('S')) then
+    // Pressed S (last to press, do not allow ctrl, alt or shift)
+    if IsKeyDown and (kbData^.vkCode = Ord('S'))
+      and (GetAsyncKeyState(VK_CONTROL) >= 0)
+      and (GetAsyncKeyState(VK_MENU) >= 0)
+      and (GetAsyncKeyState(VK_SHIFT) >= 0)
+      and (GetAsyncKeyState(VK_LWIN) < 0) or (GetAsyncKeyState(VK_RWIN) < 0) then
     begin
-      if (GetAsyncKeyState(VK_LWIN) < 0) or (GetAsyncKeyState(VK_RWIN) < 0) then
-      begin
-        WinSActive := True;
+      WinSActive := True;
 
-        if Assigned(MainForm) then
-          SendMessage(MainForm.Handle, WM_CUSTOM_RUN, 0, 0);
+      if Assigned(MainForm) then
+        SendMessage(MainForm.Handle, WM_CUSTOM_RUN, 0, 0);
 
-        Result := 1;  // block 'S'
-        Exit;
-      end;
+      Result := 1;  // block 'S'
+      Exit;
     end;
 
-    // ---------------------------------------------------------
-    // WHILE in Win+S mode: block Win-DOWN but allow Win-UP
-    // ---------------------------------------------------------
+    // Win+S active
     if WinSActive then
     begin
       // Block Win-DOWN
