@@ -7,7 +7,8 @@ uses
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Winapi.SystemRT, Winapi.CommCtrl,
   Cod.Windows, System.Generics.Collections, Vcl.ExtCtrls, Vcl.StdCtrls,
   Vcl.Menus, ShellAPI, Winapi.ActiveX, System.Win.ComObj,
-  Winapi.Winrt, Winapi.ApplicationModel, Cod.WindowsRT, Cod.WindowsRT.ActivationManager, Cod.UWP, Winapi.Management;
+  Winapi.Winrt, Winapi.ApplicationModel, Cod.WindowsRT,
+  Cod.WindowsRT.ActivationManager, Cod.UWP, Winapi.Management;
 
 const
   WM_CUSTOM_RUN = WM_USER + 100;
@@ -175,7 +176,7 @@ begin
       if Assigned(MainForm) then
         try
           MainForm.Tray.BalloonTitle := 'Command Palette was not found!';
-          MainForm.Tray.BalloonHint := 'We could not find Command Palette. We''ve attempted to run it but app does not seem to be installed.';
+          MainForm.Tray.BalloonHint := 'We''ve attempted to run the app but it does not seem to be installed on your device.';
           MainForm.Tray.ShowBalloonHint;
         except
         end;
