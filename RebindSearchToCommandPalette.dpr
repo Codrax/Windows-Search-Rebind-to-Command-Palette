@@ -10,6 +10,7 @@ uses
 begin
   Application.Initialize;
 
+  SetSemaphore('com.codrutsoft.rebindsearchtocommandpalette');
   InstanceAuto(TAutoInstanceMode.TerminateIfOtherExist);
 
   Application.MainFormOnTaskbar := True;

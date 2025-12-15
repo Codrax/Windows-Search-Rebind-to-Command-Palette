@@ -6,7 +6,8 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Winapi.SystemRT, Winapi.CommCtrl,
   Cod.Windows, System.Generics.Collections, Vcl.ExtCtrls, Vcl.StdCtrls,
-  Vcl.Menus, ShellAPI;
+  Vcl.Menus, ShellAPI, Winapi.ActiveX, System.Win.ComObj,
+  Winapi.Winrt, Winapi.ApplicationModel, Cod.WindowsRT, Cod.WindowsRT.ActivationManager, Cod.UWP, Winapi.Management;
 
 const
   WM_CUSTOM_RUN = WM_USER + 100;
@@ -39,41 +40,13 @@ var
 
   // Hook(er)
   KeyboardHook: HHOOK;
+  MissingCounter: integer=0;
+
+  ExistanceValidated: boolean=false;
 
 implementation
 
 {$R *.dfm}
-
-function GetCommandPaletteAppHWND: HWND;
-var
-  AFound: integer;
-begin
-  AFound := 0;
-
-  // Find
-  EnumerateActiveWindows(procedure(Window: HWND; var Continue: boolean) begin
-    if Window.GetTitle = 'Command Palette' then begin
-      AFound := Window;
-      Continue := false;
-    end;
-  end);
-  Result := AFound;
-end;
-
-procedure SimulateTrayClick(AppHWND: HWND);
-const
-  WM_TRAY_CALLBACK = WM_USER + 1;  // Vcl.ExtCtrls
-  WM_LBUTTONDOWN = $0201;
-  WM_LBUTTONUP   = $0202;
-begin
-  if not IsWindow(AppHWND) then Exit;
-
-  // LBUTTONDOWN
-  PostMessage(AppHWND, WM_TRAY_CALLBACK, 0, WM_LBUTTONDOWN);
-
-  // LBUTTONUP
-  PostMessage(AppHWND, WM_TRAY_CALLBACK, 0, WM_LBUTTONUP);
-end;
 
 var
   WinSActive: Boolean = False;
@@ -146,43 +119,79 @@ begin
     UnhookWindowsHookEx(KeyboardHook);
 end;
 
-procedure FocusWindow(Window: HWND);
+procedure AttachThreadFocusWindow(Window: HWND);
 var
   ForeThread, ThisThread: DWORD;
 begin
   ForeThread := GetWindowThreadProcessId(GetForegroundWindow(), nil);
   ThisThread := GetCurrentThreadId();
 
-  AttachThreadInput(ThisThread, ForeThread, True);
-  SetForegroundWindow(Window);
-  SetActiveWindow(Window);
-  BringWindowToTop(Window);
-  AttachThreadInput(ThisThread, ForeThread, False);
+  if AttachThreadInput(ThisThread, ForeThread, True) then begin
+    SetForegroundWindow(Window);
+    SetActiveWindow(Window);
+    BringWindowToTop(Window);
+    AttachThreadInput(ThisThread, ForeThread, False);
+  end;
+end;
+
+function GetCommandPaletteAppHWND: HWND;
+var
+  AFound: integer;
+begin
+  AFound := 0;
+
+  // Find
+  EnumerateActiveWindows(procedure(Window: HWND; var Continue: boolean) begin
+    if Window.GetTitle = 'Command Palette' then begin
+      AFound := Window;
+      Continue := false;
+    end;
+  end);
+  Result := AFound;
 end;
 
 procedure DoRunCommandPalette;
+const
+  APP_FAMILYNAME = 'Microsoft.CommandPalette_8wekyb3d8bbwe';
+  APP_ACTIVATIONNAME = '!App';
 var
-  Window: HWND;
+  Mgr: IApplicationActivationManager;
+  PID: dword;
+  aHWND: HWND;
 begin
-  Window := GetCommandPaletteAppHWND;
-  if Window <> 0 then begin
-    // Click
-    SimulateTrayClick(Window);
+  // Exists?
+  if not ExistanceValidated then begin
+    const PackageManager = TDeployment_PackageManager.Create;
+    var Iterable: IIterable_1__IPackage;
+    const FamName = HSTRING.Create(APP_FAMILYNAME);
+    const UserSID = HSTRING.Create(GetUserCLSID);
+    try
+      Iterable := PackageManager.FindPackagesForUser(UserSID, FamName);
+    except
+      FamName.Free;
+      UserSID.Free;
+    end;
+    if not Iterable.First.HasCurrent then begin
+      if Assigned(MainForm) then
+        try
+          MainForm.Tray.BalloonTitle := 'Command Palette was not found!';
+          MainForm.Tray.BalloonHint := 'We could not find Command Palette. We''ve attempted to run it but app does not seem to be installed.';
+          MainForm.Tray.ShowBalloonHint;
+        except
+        end;
+    end;
 
-    // Bring to top
-    FocusWindow( Window );
-  end else begin
-    // Attempt to start command palette
-    ShellExecute(0, 'open', 'x-cmdpal://', nil, nil, SW_SHOW);
-
-    if Assigned(MainForm) then
-      try
-        MainForm.Tray.BalloonTitle := 'Starting Command Palette...';
-        MainForm.Tray.BalloonHint := 'We could not find Command Palette running. We''re attempting to start it now.';
-        MainForm.Tray.ShowBalloonHint;
-      except
-      end;
+    // Do not call again
+    ExistanceValidated := true;
   end;
+
+  // Click
+  Mgr := TApplicationActivationManager.Create;
+  Mgr.ActivateApplication(APP_FAMILYNAME+APP_ACTIVATIONNAME, nil, ActivateOptions.None, PID);
+
+  // Focus Window
+  aHWND := GetCommandPaletteAppHWND;
+  AttachThreadFocusWindow(aHWND);
 end;
 
 procedure TMainForm.Delayed1RunTimer(Sender: TObject);
